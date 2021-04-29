@@ -4,8 +4,6 @@ import rospy
 import numpy as np
 import os
 
-from q_learning_project.msg import QLearningReward, QMatrix, QMatrixRow, RobotMoveDBToBlock
-
 # Path of directory on where this file is located
 path_prefix = os.path.dirname(__file__) + "/action_states/"
 
@@ -46,30 +44,10 @@ class QLearning(object):
         self.states = np.loadtxt(path_prefix + "states.txt")
         self.states = list(map(lambda x: list(map(lambda y: int(y), x)), self.states))
 
-        rospy.Subscriber("/q_learning/reward", QLearningReward, self.get_learning_reward())
-
-        self.matrix_pub = rospy.Publisher("/q_learning/q_matrix", QMatrix, queue_size=10)
-        self.action_pub = rospy.Publisher("/q_learning/robot_action", RobotMoveDBToBlock, queue_size=10)
-
-        action = RobotMoveDBToBlock()
-
-        print(self.action_matrix[0])
-
-
-    def get_learning_reward(data):
-        print(data)
-
-
     def save_q_matrix(self):
         # TODO: You'll want to save your q_matrix to a file once it is done to
         # avoid retraining
         return
 
-
-    def run(self):
-        rospy.spin()
-
-
 if __name__ == "__main__":
     node = QLearning()
-    rospy.spin()
