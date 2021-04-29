@@ -4,6 +4,7 @@ import rospy
 import numpy as np
 import os
 
+from std_msgs.msg import Header
 from q_learning_project.msg import QLearningReward, QMatrix, QMatrixRow, RobotMoveDBToBlock
 
 # Path of directory on where this file is located
@@ -51,22 +52,89 @@ class QLearning(object):
         self.matrix_pub = rospy.Publisher("/q_learning/q_matrix", QMatrix, queue_size=10)
         self.action_pub = rospy.Publisher("/q_learning/robot_action", RobotMoveDBToBlock, queue_size=10)
 
-        action_num = int(self.action_matrix[0][1])
-        action_data = self.actions[action_num]
+        rospy.sleep(2)
 
+        self.q_matrix = []
+        self.init_q_matrix()
+
+        self.current_state = 0
+        self.next_state = None
+        self.action_num = None
+        self.do_next_action()
+
+
+    def init_q_matrix(self):
+        for i in range(64):
+            row = list(np.repeat(0, 9))
+            self.q_matrix.append(row)
+
+
+    def publish_q_matrix(self):
+        m = QMatrix()
+        l = []
+        for row in self.q_matrix:
+            r = QMatrixRow()
+            r.q_matrix_row = row
+            l.append(r)
+
+        m.header = Header(stamp=rospy.Time.now())
+        m.q_matrix = l
+        self.matrix_pub.publish(m)
+
+
+    def random_action(self, action_options):
+        allowed_action_idxs = []
+        for i in range(len(action_options)):
+            action = int(action_options[i])
+            if action != -1:
+                allowed_action_idxs.append(i)
+
+        if len(allowed_action_idxs) == 0:
+            return None
+        
+        action_idx = np.random.choice(allowed_action_idxs)
+        action_num = int(action_options[action_idx])
+        next_state = action_idx
+        return (action_num, next_state)
+
+
+    def do_next_action(self):
+        action_options = self.action_matrix[self.current_state]
+        res = self.random_action(action_options)
+        if res is None:
+            self.current_state = 0
+            return self.do_next_action()
+        action_num = res[0]
+        next_state = res[1]
+        
+        action_data = self.actions[action_num]
         action = RobotMoveDBToBlock()
         action.robot_db = action_data['dumbbell']
         action.block_id = action_data['block']
 
-        rospy.sleep(2)
-
-        print(action)
+        self.action_num = action_num
+        self.next_state = next_state
         self.action_pub.publish(action)
 
 
+    def find_max_reward(self, row):
+        return max(row)
+
+
     def get_learning_reward(self, data):
-        print(data)
-        return
+        reward = data.reward
+        if reward > 0:
+            print(self.q_matrix)
+            return
+
+        next_r = self.find_max_reward(self.q_matrix[self.next_state])
+
+        self.q_matrix[self.current_state][self.action_num] = int(round(reward + 0.8 * next_r))
+
+        self.publish_q_matrix()
+        
+        self.current_state = self.next_state
+        self.do_next_action()
 
 
     def save_q_matrix(self):
