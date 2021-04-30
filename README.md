@@ -1,7 +1,13 @@
-# q_learning_project
+# Q-Learning Project
+
+Team members: Kir Nagaitsev and Sydney Jenkins
+
 ## Q-learning algorithm
-Executing the Q-learning algorithm 
-Determining when the Q-matrix has converged: 
+
+We will execute the Q-learning algorithm by saving our initial state 0, randomly choosing a valid action based on the current state and submitting this action, then computing the new value of the state/action location in our Q-matrix when the reward is sent back. We will then call our action function to continue the process, resetting back to state 0 whenever there are no valid actions. We can test this using the provided phantom robot code, then placing a large delay between each action to see that actions are being done correctly and weights are being assigned correctly through printing of the Q-matrix.
+
+We will determine when the Q-matrix has converged by comparing the Q-matrix on each iteration, and if it does not change for some large set number of iterations like 100, we will say it has converged. This constant may need to be larger, but 100 is likely enough to confirm convergence. We will test this by running the algorithm twice and checking that the 2 resulting Q-matrices are identical, indicating that they both converged.
+
 Once the Q-matrix has converged, how to determine which actions the robot should take to maximize expected reward: 
 
 ## Robot perception
