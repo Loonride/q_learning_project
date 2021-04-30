@@ -8,7 +8,7 @@ We will execute the Q-learning algorithm by saving our initial state 0, randomly
 
 We will determine when the Q-matrix has converged by comparing the Q-matrix on each iteration, and if it does not change for some large set number of iterations like 100, we will say it has converged. This constant may need to be larger, but 100 is likely enough to confirm convergence. We will test this by running the algorithm twice and checking that the 2 resulting Q-matrices are identical, indicating that they both converged.
 
-Once the Q-matrix has converged, how to determine which actions the robot should take to maximize expected reward: 
+Once the Q-matrix has converged, given the current state of the robot, we will select the action at that state with the highest value in the Q-matrix. We will repeat this until no more actions can be made, and this should lead to the robot likely receiving a reward. Testing this requires first confirming that the robot actually gets a good reward, then confirming that the action sequence matches up with the ideal action choices in the Q-matrix.
 
 ## Robot perception
 
@@ -22,3 +22,10 @@ Picking up and putting down the dumbbells with the OpenMANIPULATOR arm: We will 
 Navigating to the appropriate locations to pick up and put down the dumbbells: Once the location of the dumbbell/block relative to the robot has been determined using the methods described in Robot Perception, we will have the robot turn in the given direction and move forward until it reaches some distance x from the object. We can test this component by placing the robot in a world with dumbbells and blocks and having it navigate toward one of them. 
 
 ## Timeline
+
+- May 2 - Have a single or a few Q-learning iterations set up.
+- May 3 - Complete Q-learning and test it. 
+- May 5 - Have robot perception set up.
+- May 7 - Set up robot manipulation for basic actions.
+- May 10 - Put everything together to run actions with robot perception and the Q-matrix.
+- May 12 - Finish writeup
