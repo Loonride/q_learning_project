@@ -1,7 +1,7 @@
 # q_learning_project
 ## Q-learning algorithm
 Executing the Q-learning algorithm 
-Determining when the Q-matrix has converged: We will consider that Q has converged 
+Determining when the Q-matrix has converged: 
 Once the Q-matrix has converged, how to determine which actions the robot should take to maximize expected reward: 
 
 ## Robot perception
