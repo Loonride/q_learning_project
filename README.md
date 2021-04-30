@@ -11,7 +11,8 @@ Determining the identities and locations of the three colored dumbbells: We will
 Determining the identities and locations of the three numbered blocks: We will use the /scan ROS topic to identify the directions of nearby objects. We will then use the pre-trained keras_ocr model to identify the numbers and positions of the blocks observed by the robot's RGB camera (accessed using the /camera/rgb/image_raw ROS topic) when facing these directions. We will test this component using a similar approach to the one described above: we will write a function that returns the number identifiers and locations of the blocks identified by the robot, and compare them to the true values. 
 
 ## Robot manipulation & movement
-Picking up and putting down the dumbbells with the OpenMANIPULATOR arm: 
-Navigating to the appropriate locations to pick up and put down the dumbbells: 
+Picking up and putting down the dumbbells with the OpenMANIPULATOR arm: We will use move_group_gripper.go() to ensure that the distance between the grippers is less than the maximum dumbbel width and larger than the minimum dumbbell width.  To pick up the dumbbell, we will then calculate what height the gripper should be at, use move_grou_arm.go() to move the arm to the goal position, have the robot approach the dumbbell until it is close enough to grasp the dumbbell, and lift the arm in order to lift the dumbbell. To put down the dumbbell, we will then lower the arm to the original height and have the arm pull away. We will test this component by placing a dumbbell in front of the robot and having it attempt to pick it up and put it down. 
+
+Navigating to the appropriate locations to pick up and put down the dumbbells: Once the location of the dumbbell/block relative to the robot has been determined using the methods described in Robot Perception, we will have the robot turn in the given direction and move forward until it reaches some distance x from the object. We can test this component by placing the robot in a world with dumbbells and blocks and having it navigate toward one of them. 
 
 ## Timeline
