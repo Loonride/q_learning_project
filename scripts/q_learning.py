@@ -3,6 +3,7 @@
 import rospy
 import numpy as np
 import os
+import csv
 
 from std_msgs.msg import Header
 from q_learning_project.msg import QLearningReward, QMatrix, QMatrixRow, RobotMoveDBToBlock
@@ -54,8 +55,13 @@ class QLearning(object):
 
         rospy.sleep(2)
 
+        self.use_saved_matrix = False
+        self.q_matrix_path = 'output/q_matrix.csv'
+
         self.q_matrix = []
         self.init_q_matrix()
+
+        self.unchanged_count = 0
 
         self.current_state = 0
         self.next_state = None
@@ -64,6 +70,10 @@ class QLearning(object):
 
 
     def init_q_matrix(self):
+        if self.use_saved_matrix:
+            self.load_q_matrix()
+            return
+
         for i in range(64):
             row = list(np.repeat(0, 9))
             self.q_matrix.append(row)
@@ -82,7 +92,7 @@ class QLearning(object):
         self.matrix_pub.publish(m)
 
 
-    def random_action(self, action_options):
+    def choose_action(self, action_options):
         allowed_action_idxs = []
         for i in range(len(action_options)):
             action = int(action_options[i])
@@ -92,6 +102,20 @@ class QLearning(object):
         if len(allowed_action_idxs) == 0:
             return None
         
+        if self.use_saved_matrix:
+            best_q_value = None
+            best_action_num = None
+            best_next_state = None
+            for action_idx in allowed_action_idxs:
+                action_num = int(action_options[action_idx])
+                next_state = action_idx
+                q_value = self.q_matrix[self.current_state][action_num]
+                if best_q_value is None or q_value > best_q_value:
+                    best_q_value = q_value
+                    best_action_num = action_num
+                    best_next_state = next_state
+            return (best_action_num, best_next_state)
+
         action_idx = np.random.choice(allowed_action_idxs)
         action_num = int(action_options[action_idx])
         next_state = action_idx
@@ -100,8 +124,11 @@ class QLearning(object):
 
     def do_next_action(self):
         action_options = self.action_matrix[self.current_state]
-        res = self.random_action(action_options)
+        res = self.choose_action(action_options)
         if res is None:
+            if self.use_saved_matrix:
+                return
+
             self.current_state = 0
             return self.do_next_action()
         action_num = res[0]
@@ -123,24 +150,37 @@ class QLearning(object):
 
     def get_learning_reward(self, data):
         reward = data.reward
-        if reward > 0:
-            print(self.q_matrix)
-            return
-
         next_r = self.find_max_reward(self.q_matrix[self.next_state])
 
-        self.q_matrix[self.current_state][self.action_num] = int(round(reward + 0.8 * next_r))
+        current_val = self.q_matrix[self.current_state][self.action_num]
+        new_val = int(round(reward + 0.8 * next_r))
+        if current_val == new_val:
+            self.unchanged_count += 1
+        else:
+            self.unchanged_count = 0
+            self.q_matrix[self.current_state][self.action_num] = new_val
+            self.publish_q_matrix()
 
-        self.publish_q_matrix()
+        if self.unchanged_count == 100:
+            self.save_q_matrix()
+            return
         
         self.current_state = self.next_state
         self.do_next_action()
 
 
     def save_q_matrix(self):
-        # TODO: You'll want to save your q_matrix to a file once it is done to
-        # avoid retraining
-        return
+        with open(self.q_matrix_path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            for row in self.q_matrix:
+                writer.writerow(row)
+
+
+    def load_q_matrix(self):
+        with open(self.q_matrix_path, newline='') as csvfile:
+            reader = csv.reader(csvfile)
+            for row in reader:
+                self.q_matrix.append(list(map(lambda x: int(x), row)))
 
 
     def run(self):
