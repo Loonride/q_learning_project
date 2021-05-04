@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
+import numpy
 
 import cv2, cv_bridge
 from std_msgs.msg import Empty
@@ -12,29 +13,38 @@ class RobotMovement(object):
     def __init__(self):
         rospy.init_node("robot_movement")
 
+        self.initalized = False
+
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
         # initalize the debugging window
         # cv2.namedWindow("window", 1)
-        # self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
-        #                 Image, self.find_dumbbells)
+        self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
+                        Image, self.find_dumbbells)
         self.ready_pub = rospy.Publisher("/q_learning/ready_for_actions", Empty, queue_size=10)
+        self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+
+        self.action_queue = []
 
         rospy.Subscriber("/q_learning/robot_action", RobotMoveDBToBlock, self.handle_robot_action)
 
         rospy.sleep(2)
         self.ready_pub.publish(Empty())
-        print('hello2')
+
+        self.initalized = True
 
 
     def handle_robot_action(self, data):
-        print(data)
+        self.action_queue.append(data)
 
 
     def find_dumbbells(self, msg):
+        if (not self.initalized):
+            return
+
         velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
-        image = self.bridge.imgmsg_to_cv2(msg,desired_encoding='bgr8')
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # define the upper and lower bounds rgb
@@ -72,6 +82,15 @@ class RobotMovement(object):
 
         cv2.imshow("window", image)
         cv2.waitKey(3)
+
+
+    def set_v(self, velocity, angular_velocity):
+        """ The current velocity and angular velocity of the robot are set here
+        """
+        v1 = Vector3(velocity, 0.0, 0.0)
+        v2 = Vector3(0.0, 0.0, angular_velocity)
+        t = Twist(v1, v2)
+        self.cmd_vel_pub.publish(t)
 
 
     def run(self):
