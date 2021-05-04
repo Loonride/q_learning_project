@@ -1,1 +1,4 @@
-<!-- TODO -->
+<launch>
+  <node name="send_actions" pkg="q_learning_project" type="send_actions.py" output="screen" />
+  <node name="robot_movement" pkg="q_learning_project" type="robot_movement.py" output="screen" />
+</launch>
