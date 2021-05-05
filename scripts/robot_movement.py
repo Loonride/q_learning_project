@@ -42,6 +42,15 @@ class RobotMovement(object):
         if (not self.initalized):
             return
 
+        if len(self.action_queue) == 0:
+            return
+        
+        target = self.action_queue[0]
+        color = target.robot_db # "red", "blue", "green"
+        block_id = target.block_id # 1, 2, 3
+
+        print(color, block_id)
+
         velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
