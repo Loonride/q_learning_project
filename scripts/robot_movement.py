@@ -7,28 +7,29 @@ import cv2, cv_bridge
 from std_msgs.msg import Empty
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Vector3
 from q_learning_project.msg import RobotMoveDBToBlock
 
 class RobotMovement(object):
     def __init__(self):
         rospy.init_node("robot_movement")
-
         self.initalized = False
 
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
         # initalize the debugging window
-        # cv2.namedWindow("window", 1)
-        self.image_sub = rospy.Subscriber('camera/rgb/image_raw',
-                        Image, self.find_dumbbells)
+        cv2.namedWindow("window", 1)
+        # set self.front_distance to distance to nearest object in front of robot
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.getDistance)
+        self.image_sub = rospy.Subscriber('camera/rgb/image_raw', Image, self.complete_action)
         self.ready_pub = rospy.Publisher("/q_learning/ready_for_actions", Empty, queue_size=10)
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
 
         self.action_queue = []
-
+        self.front_distance = 100
         rospy.Subscriber("/q_learning/robot_action", RobotMoveDBToBlock, self.handle_robot_action)
-
-        rospy.sleep(2)
+        rospy.sleep(1)
         self.ready_pub.publish(Empty())
 
         self.initalized = True
@@ -37,21 +38,26 @@ class RobotMovement(object):
     def handle_robot_action(self, data):
         self.action_queue.append(data)
 
+    def getDistance(self, msg):
+        print("inside get distance")
+        self.front_distance = msg.ranges[0]
 
-    def find_dumbbells(self, msg):
+    def complete_action(self, msg):
+        print("INSIDE")
         if (not self.initalized):
+            print("returning")
             return
 
         if len(self.action_queue) == 0:
+            print("no actions to do")
             return
-        
+        print("Past if statements")
         target = self.action_queue[0]
         color = target.robot_db # "red", "blue", "green"
         block_id = target.block_id # 1, 2, 3
 
-        print(color, block_id)
+        self.dumbbell_target = np.where(np.asarray(["red","green","blue"]==color))[0]
 
-        velocity_publisher = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -64,7 +70,7 @@ class RobotMovement(object):
 
         mask = cv2.inRange(hsv, rgb_lower[self.dumbbell_target], rgb_upper[self.dumbbell_target])
 
-        # this erases all pixels that aren't yellow
+        # this erases all pixels that aren't desired color
         h, w, d = image.shape
         search_top = int(3*h/4)
         search_bot = int(3*h/4 + 20)
@@ -85,9 +91,13 @@ class RobotMovement(object):
 
                 err = w/2 - cx
                 k_p = 1.0 / 100.0
-                self.twist.linear.x = 0.2
-                self.twist.angular.z = k_p * err
-                self.cmd_vel_pub.publish(self.twist)
+                print(err)
+                if err > .05: 
+                    self.set_v(0, k_p*err)
+                elif self.front_distance > .8: 
+                    self.set_v(.2, k_p*err)
+                else: 
+                    self.set_v(0,0)
 
         cv2.imshow("window", image)
         cv2.waitKey(3)

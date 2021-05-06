@@ -13,6 +13,7 @@ class SendActions(Actions):
 
 
     def ready_for_actions(self, data):
+        print("Making action")
         while self.do_next_action():
             self.current_state = self.next_state
 
