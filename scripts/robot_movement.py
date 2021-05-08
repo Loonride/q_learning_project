@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
-import numpy
+import numpy as np
 
 import cv2, cv_bridge
 from std_msgs.msg import Empty
@@ -10,11 +10,15 @@ from geometry_msgs.msg import Twist
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
 from q_learning_project.msg import RobotMoveDBToBlock
+import keras_ocr
 
 class RobotMovement(object):
     def __init__(self):
         rospy.init_node("robot_movement")
         self.initalized = False
+
+        # download pre-trained model
+        self.keras_pipeline = keras_ocr.pipeline.Pipeline()
 
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
@@ -28,6 +32,7 @@ class RobotMovement(object):
 
         self.action_queue = []
         self.front_distance = 100
+        self.carrying_db = False
         rospy.Subscriber("/q_learning/robot_action", RobotMoveDBToBlock, self.handle_robot_action)
         rospy.sleep(1)
         self.ready_pub.publish(Empty())
@@ -45,16 +50,22 @@ class RobotMovement(object):
     def complete_action(self, msg):
         print("INSIDE")
         if (not self.initalized):
+            self.set_v(0,0)
             print("returning")
             return
 
         if len(self.action_queue) == 0:
+            self.set_v(0,0)
             print("no actions to do")
             return
-        print("Past if statements")
+
+        if self.carrying_db:
+            self.find_number(msg)
+            return
+
         target = self.action_queue[0]
         color = target.robot_db # "red", "blue", "green"
-        block_id = target.block_id # 1, 2, 3
+        self.block_id = target.block_id # 1, 2, 3
 
         self.dumbbell_target = np.where(np.asarray(["red","green","blue"]==color))[0]
 
@@ -63,8 +74,8 @@ class RobotMovement(object):
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # define the upper and lower bounds rgb
-        lower_bounds = numpy.array([0, 121/2, 241/2]) 
-        upper_bounds = numpy.array([60/2, 180/2, 300/2])
+        lower_bounds = np.array([0, 121/2, 241/2]) 
+        upper_bounds = np.array([60/2, 180/2, 300/2])
         rgb_lower = [[lower_bounds[i],50, 50] for i in range(3)]
         rgb_upper = [[upper_bounds[i],255, 255] for i in range(3)]
 
@@ -98,10 +109,24 @@ class RobotMovement(object):
                     self.set_v(.2, k_p*err)
                 else: 
                     self.set_v(0,0)
+                    #pick up dumbbell
+                    self.carrying_db = True
 
-        cv2.imshow("window", image)
-        cv2.waitKey(3)
+        #cv2.imshow("window", image)
+        #cv2.waitKey(3)
+        return
 
+    def find_number(self, msg):
+        """ Find block with target ID
+        """
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        image = np.asarray(image)
+        prediction_groups = self.keras_pipeline.recognize([image])
+        print("Predicted groups:", prediction_groups)
+        if self.block_id in prediction_groups:
+            set_v(1,0)
+        else: 
+            set_v(0,.1)
 
     def set_v(self, velocity, angular_velocity):
         """ The current velocity and angular velocity of the robot are set here
