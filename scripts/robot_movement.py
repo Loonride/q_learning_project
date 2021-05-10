@@ -15,7 +15,7 @@ import keras_ocr
 class RobotMovement(object):
     def __init__(self):
         rospy.init_node("robot_movement")
-        self.initalized = False
+        self.initialized = False
 
         # download pre-trained model
         self.keras_pipeline = keras_ocr.pipeline.Pipeline()
@@ -48,10 +48,9 @@ class RobotMovement(object):
         # the interface to the group of joints making up the turtlebot3
         # openmanipulator gripper
         self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
-        
 
         print("Initialized")        
-        self.initalized = True
+        self.initialized = True
 
 
     def handle_robot_action(self, data):
@@ -61,7 +60,7 @@ class RobotMovement(object):
         self.front_distance = msg.ranges[0]
 
     def complete_action(self, msg):
-        if (not self.initalized):
+        if (not self.initialized):
             return
 
         if len(self.action_queue) == 0:
@@ -69,17 +68,18 @@ class RobotMovement(object):
 
         if self.carrying_db:
             print("HERE") #Need to go to office hours to ask about this
-            if self.turning==0:
-                print("TURNING") 
-                self.set_v(0,3.1415/2)
-                rospy.sleep(2.)
-                self.turning=1
-            else:
-                self.set_v(0,0)
-                self.find_number(msg)
-                image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-                #cv2.imshow("window", image)
-                #cv2.waitKey(0)
+            # if self.turning==0:
+            #     print("TURNING") 
+            #     self.set_v(0,3.1415/2)
+            #     rospy.sleep(2.)
+            #     self.turning=1
+            # else:
+            #     self.set_v(0,0)
+            #     self.find_number(msg)
+            #     image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+            #     #cv2.imshow("window", image)
+            #     #cv2.waitKey(0)
+            self.initialized = False
             return
 
         if not self.arm_initialized:
@@ -125,14 +125,15 @@ class RobotMovement(object):
 
                 err = w/2 - cx
                 k_p = .003
-                if err > .05: 
-                    self.set_v(.2, k_p*err)
-                elif self.front_distance > .35: 
-                    self.set_v(.2, k_p*err)
-                else: 
+                if self.front_distance > .22:
+                    if err > .05: 
+                        self.set_v(.05, k_p*err)
+                    else:
+                        self.set_v(.2, k_p*err)
+                else:
                     self.set_v(0,0)
                     #pick up dumbbell
-                    #self.pickup_db()
+                    self.pickup_db()
                     self.carrying_db = True
         #else: 
         #    self.set_v(0,.2)
@@ -141,38 +142,42 @@ class RobotMovement(object):
 
 
     def initialize_arm(self):
-        gripper_joint_open = [0.009, 0.009]
+        print('Initializing Arm')
+        gripper_joint_open = [0.01, 0.01]
         self.move_group_gripper.go(gripper_joint_open, wait=True)
         self.move_group_gripper.stop()
 
-        for i in range(3):
-            # wait=True ensures that the movement is synchronous
-            self.move_group_arm.go([0.0,
-                     math.radians(10.0),
-                     math.radians(20.0),
-                     math.radians(-40.0)], wait=True)
-            # Calling ``stop()`` ensures that there is no residual movement
-            self.move_group_arm.stop()
+        # wait=True ensures that the movement is synchronous
+        self.move_group_arm.go([0.0,
+                    math.radians(50.0),
+                    math.radians(-30.0),
+                    math.radians(-20.0)], wait=True)
+        # Calling ``stop()`` ensures that there is no residual movement
+        self.move_group_arm.stop()
+        print('Arm Initialized')
 
     def pickup_db(self):
         """ Pickup dumbbell
         """
-        # array of arm joint locations for joint 0
-        arm_joint_0 = [math.pi/2, 0, -1 * math.pi/2]
+        # # array of arm joint locations for joint 0
+        # arm_joint_0 = [math.pi/2, 0, -1 * math.pi/2]
 
-        # select location based on data direction 
-        arm_joint_0_goal = arm_joint_0[data.direction]
+        # # select location based on data direction 
+        # arm_joint_0_goal = arm_joint_0[data.direction]
 
-        gripper_joint_close = [-0.01, -0.01]
+        # gripper_joint_close = [0.005, 0.005]
 
-        for i in range(3):
-            # wait=True ensures that the movement is synchronous
-            self.move_group_arm.go([arm_joint_0_goal, 0, 0, 0], wait=True)
-            # Calling ``stop()`` ensures that there is no residual movement
-            self.move_group_arm.stop()
+        # self.move_group_gripper.go(gripper_joint_close)
+        # self.move_group_gripper.stop()
 
-        self.move_group_gripper.go(gripper_joint_close)
-        self.move_group_gripper.stop()
+        # wait=True ensures that the movement is synchronous
+        # self.move_group_arm.go([arm_joint_0_goal, 0, 0, 0], wait=True)
+        self.move_group_arm.go([0.0,
+                    math.radians(0.0),
+                    math.radians(-40.0),
+                    math.radians(-20.0)], wait=True)
+        # Calling ``stop()`` ensures that there is no residual movement
+        self.move_group_arm.stop()
 
 
     def find_number(self, msg):
