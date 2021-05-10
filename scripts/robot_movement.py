@@ -22,7 +22,7 @@ class RobotMovement(object):
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
         # initalize the debugging window
-        cv2.namedWindow("window", 1)
+        # cv2.namedWindow("window", 1)
         # set self.front_distance to distance to nearest object in front of robot
         self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.getDistance)
         self.image_sub = rospy.Subscriber('camera/rgb/image_raw', Image, self.complete_action)
@@ -106,8 +106,8 @@ class RobotMovement(object):
                     self.carrying_db = True
         else: 
             self.set_v(0,.2)
-        #cv2.imshow("window", image)
-        #cv2.waitKey(3)
+        cv2.imshow("window", image)
+        cv2.waitKey(3)
 
     def find_number(self, msg):
         """ Find block with target ID
