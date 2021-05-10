@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 import numpy as np
 import moveit_commander
 import math
+import time
 from std_msgs.msg import Empty
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
@@ -38,8 +39,10 @@ class RobotMovement(object):
         rospy.sleep(1)
         self.ready_pub.publish(Empty())
 
-        self.turning = 0
+        self.turning = False
         self.arm_initialized = False
+
+        self.past_counter = 0
 
         print("Starting arm")
         # the interface to the group of joints making up the turtlebot3
@@ -49,7 +52,7 @@ class RobotMovement(object):
         # openmanipulator gripper
         self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
 
-        print("Initialized")        
+        print("Initialized")
         self.initialized = True
 
 
@@ -66,20 +69,26 @@ class RobotMovement(object):
         if len(self.action_queue) == 0:
             return
 
+        self.carrying_db = True
         if self.carrying_db:
-            print("HERE") #Need to go to office hours to ask about this
-            # if self.turning==0:
-            #     print("TURNING") 
-            #     self.set_v(0,3.1415/2)
-            #     rospy.sleep(2.)
-            #     self.turning=1
-            # else:
-            #     self.set_v(0,0)
-            #     self.find_number(msg)
-            #     image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-            #     #cv2.imshow("window", image)
-            #     #cv2.waitKey(0)
-            self.initialized = False
+            #Need to go to office hours to ask about this
+            if self.turning:
+                print("TURNING") 
+                self.set_v(0, .5)
+                self.turning = False
+                self.past_counter = 0
+                rospy.sleep(2)
+                self.set_v(0, 0)
+                rospy.sleep(2)
+            else:
+                if self.past_counter < 100:
+                    self.past_counter += 1
+                    return
+                # self.find_number(msg)
+                self.turning = True
+                image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                cv2.imshow("window", image)
+                cv2.waitKey(3)
             return
 
         if not self.arm_initialized:
@@ -137,8 +146,8 @@ class RobotMovement(object):
                     self.carrying_db = True
         #else: 
         #    self.set_v(0,.2)
-        #cv2.imshow("window", mask)
-        cv2.waitKey(3)
+        # cv2.imshow("window", mask)
+        # cv2.waitKey(3)
 
 
     def initialize_arm(self):
@@ -184,13 +193,15 @@ class RobotMovement(object):
         """ Find block with target ID
         """
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        image = np.asarray(image)
+        # image = np.asarray(image)
         prediction_groups = self.keras_pipeline.recognize([image])
         print("Predicted groups:", prediction_groups)
         #if self.block_id in prediction_groups:
         #    self.set_v(1,0)
         #else: 
         #    self.set_v(0,.1)
+        # cv2.imshow("window", image)
+        # cv2.waitKey(3)
 
     def set_v(self, velocity, angular_velocity):
         """ The current velocity and angular velocity of the robot are set here
