@@ -4,7 +4,8 @@ import rospy, cv2, cv_bridge, numpy
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Twist
 import numpy as np
-
+import moveit_commander
+import math
 from std_msgs.msg import Empty
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import Vector3
@@ -28,14 +29,28 @@ class RobotMovement(object):
         self.image_sub = rospy.Subscriber('camera/rgb/image_raw', Image, self.complete_action)
         self.ready_pub = rospy.Publisher("/q_learning/ready_for_actions", Empty, queue_size=10)
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
-
+        
         self.action_queue = []
         self.front_distance = 100
         self.carrying_db = False
+        self.carrying_db_successful = False
         rospy.Subscriber("/q_learning/robot_action", RobotMoveDBToBlock, self.handle_robot_action)
         rospy.sleep(1)
         self.ready_pub.publish(Empty())
 
+        self.turning = 0
+        self.arm_initialized = False
+
+        print("Starting arm")
+        # the interface to the group of joints making up the turtlebot3
+        # openmanipulator arm
+        self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
+        # the interface to the group of joints making up the turtlebot3
+        # openmanipulator gripper
+        self.move_group_gripper = moveit_commander.MoveGroupCommander("gripper")
+        
+
+        print("Initialized")        
         self.initalized = True
 
 
@@ -53,8 +68,23 @@ class RobotMovement(object):
             return
 
         if self.carrying_db:
-            self.find_number(msg)
+            print("HERE") #Need to go to office hours to ask about this
+            if self.turning==0:
+                print("TURNING") 
+                self.set_v(0,3.1415/2)
+                rospy.sleep(2.)
+                self.turning=1
+            else:
+                self.set_v(0,0)
+                self.find_number(msg)
+                image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                #cv2.imshow("window", image)
+                #cv2.waitKey(0)
             return
+
+        if not self.arm_initialized:
+            self.initialize_arm()
+            self.arm_initialized = True
 
         target = self.action_queue[0]
         color = target.robot_db # "red", "blue", "green"
@@ -68,19 +98,18 @@ class RobotMovement(object):
 
         # define the upper and lower bounds rgb
         lower_bounds = np.array([0, 121/2, 241/2]) 
-        upper_bounds = np.array([300000, 180/2, 300/2])
+        upper_bounds = np.array([20, 180/2, 300/2])
         rgb_lower = [np.asarray([lower_bounds[i],20, 20]) for i in range(3)]
         rgb_upper = [np.asarray([upper_bounds[i],255, 255]) for i in range(3)]
         
-        print("target:", rgb_lower[self.dumbbell_target])
         mask = cv2.inRange(hsv, rgb_lower[self.dumbbell_target], rgb_upper[self.dumbbell_target])
-        print("Mask:",mask)
+        if color=="red": 
+            mask2 = cv2.inRange(hsv, np.asarray([170/2, 20, 20]), np.asarray([180/2, 255, 255]))
+            mask = cv2.bitwise_or(mask, mask2)
+        #cv2.imshow("window", mask)
+        #cv2.waitKey(0)
         # this erases all pixels that aren't desired color
         h, w, d = image.shape
-        search_top = int(3*h/4)
-        search_bot = int(3*h/4 + 20)
-        mask[0:search_top, 0:w] = 0
-        mask[search_bot:h, 0:w] = 0
 
         # using moments() function, the center of the colored pixels is determined
         M = cv2.moments(mask)
@@ -95,19 +124,56 @@ class RobotMovement(object):
                 cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
 
                 err = w/2 - cx
-                k_p = 1.0 / 100.0
+                k_p = .003
                 if err > .05: 
                     self.set_v(.2, k_p*err)
-                elif self.front_distance > .8: 
+                elif self.front_distance > .35: 
                     self.set_v(.2, k_p*err)
                 else: 
                     self.set_v(0,0)
                     #pick up dumbbell
+                    #self.pickup_db()
                     self.carrying_db = True
-        else: 
-            self.set_v(0,.2)
-        cv2.imshow("window", image)
+        #else: 
+        #    self.set_v(0,.2)
+        #cv2.imshow("window", mask)
         cv2.waitKey(3)
+
+
+    def initialize_arm(self):
+        gripper_joint_open = [0.009, 0.009]
+        self.move_group_gripper.go(gripper_joint_open, wait=True)
+        self.move_group_gripper.stop()
+
+        for i in range(3):
+            # wait=True ensures that the movement is synchronous
+            self.move_group_arm.go([0.0,
+                     math.radians(10.0),
+                     math.radians(20.0),
+                     math.radians(-40.0)], wait=True)
+            # Calling ``stop()`` ensures that there is no residual movement
+            self.move_group_arm.stop()
+
+    def pickup_db(self):
+        """ Pickup dumbbell
+        """
+        # array of arm joint locations for joint 0
+        arm_joint_0 = [math.pi/2, 0, -1 * math.pi/2]
+
+        # select location based on data direction 
+        arm_joint_0_goal = arm_joint_0[data.direction]
+
+        gripper_joint_close = [-0.01, -0.01]
+
+        for i in range(3):
+            # wait=True ensures that the movement is synchronous
+            self.move_group_arm.go([arm_joint_0_goal, 0, 0, 0], wait=True)
+            # Calling ``stop()`` ensures that there is no residual movement
+            self.move_group_arm.stop()
+
+        self.move_group_gripper.go(gripper_joint_close)
+        self.move_group_gripper.stop()
+
 
     def find_number(self, msg):
         """ Find block with target ID
@@ -116,10 +182,10 @@ class RobotMovement(object):
         image = np.asarray(image)
         prediction_groups = self.keras_pipeline.recognize([image])
         print("Predicted groups:", prediction_groups)
-        if self.block_id in prediction_groups:
-            set_v(1,0)
-        else: 
-            set_v(0,.1)
+        #if self.block_id in prediction_groups:
+        #    self.set_v(1,0)
+        #else: 
+        #    self.set_v(0,.1)
 
     def set_v(self, velocity, angular_velocity):
         """ The current velocity and angular velocity of the robot are set here
