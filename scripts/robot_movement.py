@@ -6,6 +6,7 @@ from geometry_msgs.msg import Twist
 import numpy as np
 import moveit_commander
 import math
+import statistics
 import time
 from std_msgs.msg import Empty
 from sensor_msgs.msg import LaserScan
@@ -68,6 +69,17 @@ class RobotMovement(object):
 
         if len(self.action_queue) == 0:
             return
+        target = self.action_queue[0]
+        color = target.robot_db # "red", "blue", "green"
+        self.block_id = target.block_id # 1, 2, 3
+
+        self.dumbbell_target = np.where(np.asarray(["red","green","blue"])==color)[0][0]
+
+        # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
+        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+
+        h, w, d = image.shape
 
         self.carrying_db = True
         if self.carrying_db:
@@ -84,9 +96,15 @@ class RobotMovement(object):
                 if self.past_counter < 100:
                     self.past_counter += 1
                     return
-                # self.find_number(msg)
-                self.turning = True
-                image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                pos = self.find_number(msg)
+                if pos is None:
+                    # the target number is not in the robot scan
+                    self.turning = True
+                else:
+                    # use this averaged target number to try and slowly center the robot on the image
+                    err = w/2 - pos
+                    print(f'Error: {err}')
+
                 cv2.imshow("window", image)
                 cv2.waitKey(3)
             return
@@ -94,16 +112,6 @@ class RobotMovement(object):
         if not self.arm_initialized:
             self.initialize_arm()
             self.arm_initialized = True
-
-        target = self.action_queue[0]
-        color = target.robot_db # "red", "blue", "green"
-        self.block_id = target.block_id # 1, 2, 3
-
-        self.dumbbell_target = np.where(np.asarray(["red","green","blue"])==color)[0][0]
-
-        # converts the incoming ROS message to OpenCV format and HSV (hue, saturation, value)
-        image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         # define the upper and lower bounds rgb
         lower_bounds = np.array([0, 121/2, 241/2]) 
@@ -118,7 +126,6 @@ class RobotMovement(object):
         #cv2.imshow("window", mask)
         #cv2.waitKey(0)
         # this erases all pixels that aren't desired color
-        h, w, d = image.shape
 
         # using moments() function, the center of the colored pixels is determined
         M = cv2.moments(mask)
@@ -196,6 +203,20 @@ class RobotMovement(object):
         # image = np.asarray(image)
         prediction_groups = self.keras_pipeline.recognize([image])
         print("Predicted groups:", prediction_groups)
+
+        block_num = self.block_id
+        print(f'Checking for block_id {block_num}')
+        centers = []
+        for g in prediction_groups[0]:
+            corners = g[1]
+            if g[0] == str(block_num):
+                c = (corners[0][0] + corners[1][0]) / 2
+                centers.append(c)
+        
+        if len(centers) == 0:
+            return None
+        return statistics.mean(centers)
+        
         #if self.block_id in prediction_groups:
         #    self.set_v(1,0)
         #else: 
