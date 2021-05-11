@@ -6,6 +6,9 @@ from q_learning_project.msg import QLearningReward
 from actions import Actions
 
 class QLearning(Actions):
+    """ This class inherits from the base class Actions, which interacts with the action
+    matrix and has helpers to choose next actions
+    """
     def __init__(self):
         super().__init__("q_learning", False)
 
@@ -24,6 +27,7 @@ class QLearning(Actions):
         next_r = self.find_max_reward(self.q_matrix[self.next_state])
 
         current_val = self.q_matrix[self.current_state][self.action_num]
+        # learning rate is 1, and this is sufficient to find the goal state
         new_val = int(round(reward + 0.8 * next_r))
         if current_val == new_val:
             self.unchanged_count += 1
@@ -32,6 +36,7 @@ class QLearning(Actions):
             self.q_matrix[self.current_state][self.action_num] = new_val
             self.publish_q_matrix()
 
+        # if the q-matrix doesn't change after 500 iterations, save and quit
         if self.unchanged_count == 500:
             self.save_q_matrix()
             print('Matrix Saved')

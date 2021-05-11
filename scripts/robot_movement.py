@@ -24,10 +24,8 @@ class RobotMovement(object):
 
         # set up ROS / OpenCV bridge
         self.bridge = cv_bridge.CvBridge()
-        # initalize the debugging window
-        # cv2.namedWindow("window", 1)
         # set self.front_distance to distance to nearest object in front of robot
-        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.getDistance)
+        self.scan_sub = rospy.Subscriber("/scan", LaserScan, self.get_distance)
         self.image_sub = rospy.Subscriber('camera/rgb/image_raw', Image, self.complete_action)
         self.ready_pub = rospy.Publisher("/q_learning/ready_for_actions", Empty, queue_size=10)
         self.cmd_vel_pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
@@ -50,7 +48,6 @@ class RobotMovement(object):
 
         self.past_counter = 0
 
-        print("Starting arm")
         # the interface to the group of joints making up the turtlebot3
         # openmanipulator arm
         self.move_group_arm = moveit_commander.MoveGroupCommander("arm")
@@ -63,14 +60,21 @@ class RobotMovement(object):
 
 
     def handle_robot_action(self, data):
+        # when we get a new action, we simply queue it and handle it later
         self.action_queue.append(data)
 
-    def getDistance(self, msg):
+
+    def get_distance(self, msg):
+        # use a few front distances to handle when we are nearing objects
         self.front_distance = msg.ranges[0]
         self.front_left = msg.ranges[330]
         self.front_right = msg.ranges[30]
 
+
     def complete_action(self, msg):
+        """ This is the callback for the image sensor reading, where we do all of the
+        robot action handling
+        """
         if (not self.initialized):
             return
 
@@ -88,22 +92,26 @@ class RobotMovement(object):
 
         h, w, d = image.shape
 
+        # if we are currently carrying a dumbbell, we first determine where the desired block
+        # is, drive towards it, then place the dumbbell down when we are close enough
         if self.carrying_db:
             if self.drive_to_block:
                 if self.front_distance > .75 and self.front_left > .75 and self.front_right > .75:
                     self.set_v(.2, 0)
                 else:
                     self.set_db()
+                    # remove the current action from the queue and reset everything so that
+                    # we can start looking for the next dumbbell
                     self.action_queue.pop(0)
                     self.carrying_db = False
                     self.drive_to_block = False
                     self.turning = False
-                    # print('PLACE DUMBBELL')
 
                 return
 
+            # here we turn and run image recognition to look for our target number at
+            # frequent intervals
             if self.turning:
-                print("TURNING") 
                 self.set_v(0, .5)
                 self.turning = False
                 if self.turn_1:
@@ -114,6 +122,10 @@ class RobotMovement(object):
                 self.set_v(0, 0)
                 rospy.sleep(2)
             else:
+                # when there is a long delay since the previous image reading that we handled,
+                # we need to iterate through some image sensor readings until we get to the most
+                # recent one because it seems that ROS sends some historical image sensor readings
+                # before sending along an up-to-date reading
                 if self.past_counter < 100:
                     self.past_counter += 1
                     return
@@ -121,7 +133,7 @@ class RobotMovement(object):
                 pos = self.find_number(msg)
                 print("POS:",pos)
                 if pos is None:
-                    # the target number is not in the robot scan
+                    # the target number is not in the robot scan so we resume turning
                     self.turning = True
                 else:
                     block_err = w/2 - pos
@@ -155,12 +167,9 @@ class RobotMovement(object):
         rgb_upper = [np.asarray([upper_bounds[i],255, 255]) for i in range(3)]
         
         mask = cv2.inRange(hsv, rgb_lower[self.dumbbell_target], rgb_upper[self.dumbbell_target])
-        if color=="red": 
+        if color == "red": 
             mask2 = cv2.inRange(hsv, np.asarray([170/2, 20, 20]), np.asarray([180/2, 255, 255]))
             mask = cv2.bitwise_or(mask, mask2)
-        #cv2.imshow("window", mask)
-        #cv2.waitKey(0)
-        # this erases all pixels that aren't desired color
 
         # using moments() function, the center of the colored pixels is determined
         M = cv2.moments(mask)
@@ -170,12 +179,9 @@ class RobotMovement(object):
                 cx = int(M['m10']/M['m00'])
                 cy = int(M['m01']/M['m00'])
 
-                # a red circle is visualized in the debugging window to indicate
-                # the center point of the colored pixels
-                cv2.circle(image, (cx, cy), 20, (0,0,255), -1)
-
                 err = w/2 - cx
                 k_p = .003
+                # drive towards the dumbbell until we are close enough to pick it up
                 if self.front_distance > .21:
                     if abs(err) > .05: 
                         self.set_v(.05, k_p*err)
@@ -185,15 +191,12 @@ class RobotMovement(object):
                     self.set_v(0,0)
                     #pick up dumbbell
                     self.pickup_db()
-                    # self.set_db()
-                    # self.initialized = False
                     self.carrying_db = True
                     self.turn_1 = True
                     self.turning = True
-        else: 
-           self.set_v(0,.4)
-        # cv2.imshow("window", mask)
-        # cv2.waitKey(3)
+        else:
+            # spin if the goal color is not visible
+            self.set_v(0, .4)
 
 
     def initialize_arm(self):
@@ -209,14 +212,12 @@ class RobotMovement(object):
         # Calling ``stop()`` ensures that there is no residual movement
         self.move_group_arm.stop()
 
+
     def set_db(self):
+        """ set down the dumbbell with the gripper then move backwards away from it
+        """
         self.set_v(0, 0)
         rospy.sleep(1)
-
-        # gripper_joint_close = [0.0065, 0.0065]
-
-        # self.move_group_gripper.go(gripper_joint_close)
-        # self.move_group_gripper.stop()
 
         rospy.sleep(1)
 
@@ -232,10 +233,6 @@ class RobotMovement(object):
         self.move_group_gripper.go(gripper_joint_open, wait=True)
         self.move_group_gripper.stop()
 
-        # self.set_v(-.25, 0)
-        # rospy.sleep(1)
-        # self.set_v(.25, 0)
-        # rospy.sleep(.8)
         self.set_v(-.5, 0)
         rospy.sleep(1)
 
@@ -245,36 +242,22 @@ class RobotMovement(object):
 
         rospy.sleep(1)
 
+
     def pickup_db(self):
         """ Pickup dumbbell
         """
-        # # array of arm joint locations for joint 0
-        # arm_joint_0 = [math.pi/2, 0, -1 * math.pi/2]
-
-        # # select location based on data direction 
-        # arm_joint_0_goal = arm_joint_0[data.direction]
-
-        # gripper_joint_close = [-0.01, -0.01]
-
-        # self.move_group_gripper.go(gripper_joint_close)
-        # self.move_group_gripper.stop()
-
-        # wait=True ensures that the movement is synchronous
-        # self.move_group_arm.go([arm_joint_0_goal, 0, 0, 0], wait=True)
-
         self.move_group_arm.go([0.0,
                     math.radians(0.0),
                     math.radians(-40.0),
                     math.radians(-20.0)], wait=True)
-        # Calling ``stop()`` ensures that there is no residual movement
         self.move_group_arm.stop()
 
 
     def find_number(self, msg):
-        """ Find block with target ID
+        """ Find block with target ID and return the x-coord of the center of the target
+        number in the image, if the target number is present. Otherwise return None
         """
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
-        # image = np.asarray(image)
         prediction_groups = self.keras_pipeline.recognize([image])
         print("Predicted groups:", prediction_groups)
 
@@ -295,14 +278,8 @@ class RobotMovement(object):
             center = centers[0]
         else: 
             center = centers[0]
-        return center #statistics.mean(centers)
-        
-        #if self.block_id in prediction_groups:
-        #    self.set_v(1,0)
-        #else: 
-        #    self.set_v(0,.1)
-        # cv2.imshow("window", image)
-        # cv2.waitKey(3)
+        return center
+
 
     def set_v(self, velocity, angular_velocity):
         """ The current velocity and angular velocity of the robot are set here

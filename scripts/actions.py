@@ -16,7 +16,21 @@ from geometry_msgs.msg import Twist
 path_prefix = os.path.dirname(__file__) + "/action_states/"
 
 class Actions(object):
+    """ This is a base class that the QLearning and SendActions classes inherit from.
+    This setup is useful because both training and action sending requires knowledge
+    of the action matrix.
+    """
+
     def __init__(self, node_name, use_saved_matrix):
+        """
+        Parameters:
+        node_name
+            set the rospy node name
+        use_saved_matrix
+            Determines whether the q-matrix should be initialized empty or if it should
+            load from the q-matrix output file. This should be False if we are training
+            and True if we are running actions based on the saved q-matrix
+        """
         # Initialize this node
         rospy.init_node(node_name)
 
@@ -55,6 +69,7 @@ class Actions(object):
         self.matrix_pub = rospy.Publisher("/q_learning/q_matrix", QMatrix, queue_size=10)
         self.action_pub = rospy.Publisher("/q_learning/robot_action", RobotMoveDBToBlock, queue_size=10)
 
+        # 
         self.use_saved_matrix = use_saved_matrix
 
         dirname = os.path.dirname(__file__)
@@ -71,6 +86,8 @@ class Actions(object):
 
 
     def init_q_matrix(self):
+        # if using the saved output matrix, we should load it rather than
+        # initializing with zeros
         if self.use_saved_matrix:
             self.load_q_matrix()
             return
@@ -94,6 +111,9 @@ class Actions(object):
 
 
     def choose_action(self, action_options):
+        """ Choose the best action given the list of states that can be transitioned to
+        from the current state (action_options)
+        """
         allowed_action_idxs = []
         for i in range(len(action_options)):
             action = int(action_options[i])
@@ -103,6 +123,8 @@ class Actions(object):
         if len(allowed_action_idxs) == 0:
             return None
         
+        # if we are choosing actions based on the saved matrix, we should select
+        # the action with the best weight at the current state in the q-matrix
         if self.use_saved_matrix:
             best_q_value = None
             best_action_num = None
@@ -117,6 +139,8 @@ class Actions(object):
                     best_next_state = next_state
             return (best_action_num, best_next_state)
 
+        # during training, we should randomly select from the allowed actions and
+        # transition to the next state to continue training
         action_idx = np.random.choice(allowed_action_idxs)
         action_num = int(action_options[action_idx])
         next_state = action_idx
@@ -126,6 +150,8 @@ class Actions(object):
     def do_next_action(self):
         action_options = self.action_matrix[self.current_state]
         res = self.choose_action(action_options)
+        # this indicates there was no state to transition to, so we either quit
+        # or continue training after a reset
         if res is None:
             if self.use_saved_matrix:
                 return False
@@ -136,6 +162,7 @@ class Actions(object):
         action_num = res[0]
         next_state = res[1]
         
+        # publish the chosen action
         action_data = self.actions[action_num]
         action = RobotMoveDBToBlock()
         action.robot_db = action_data['dumbbell']
@@ -148,6 +175,7 @@ class Actions(object):
 
 
     def save_q_matrix(self):
+        # write q-matrix to a csv file
         with open(self.q_matrix_path, 'w', newline='') as csvfile:
             writer = csv.writer(csvfile)
             for row in self.q_matrix:
