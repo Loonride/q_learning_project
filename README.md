@@ -14,7 +14,13 @@ gif, at 4x speed for fast demo:
 
 ## Q-learning algorithm description
 
-For Q-Learning we used a discount factor of 0.8, and we found a learning rate of 1 to be sufficient in order to accomplish the task.
+For Q-Learning we used a discount factor of 0.8, and we found a learning rate of 1 to be sufficient in order to accomplish the task. The training algorithm is implemented in the q_learning.py and actions.py files, and uses the virtual reset world to handle rewards.
+
+Actions are selected and published in the `do_next_action` function of the actions.py file. This function calls `choose_action` which will randomly select a valid action from the action matrix. When the reward is received from the subscription, we update the current state, update and publish the Q-Matrix using the values described above, then call `do_next_action` again.
+
+We check the current value of the Q-Matrix each time we are going to update it, and if the Q-Matrix remains unchanged for 500 iterations we say that it has converged, saving it to a CSV file.
+
+We choose actions to take based on the valid action of the highest weight in our Q-Matrix at the current state. We continue this until each dumbbell is at a block which should give a reward. This also happens in actions.py, when it loads the CSV we saved back in and selects the action in `choose_action` based on the loaded matrix, rather than choosing randomly. This difference in behavior is due to an important property of the class `use_saved_matrix`, which determines whether we are doing training or doing actions based on the saved matrix.
 
 ## Robot perception description
 
