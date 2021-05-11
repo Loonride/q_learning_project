@@ -176,7 +176,7 @@ class RobotMovement(object):
 
                 err = w/2 - cx
                 k_p = .003
-                if self.front_distance > .2:
+                if self.front_distance > .21:
                     if abs(err) > .05: 
                         self.set_v(.05, k_p*err)
                     else:
