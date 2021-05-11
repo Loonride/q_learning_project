@@ -14,6 +14,8 @@ gif, at 4x speed for fast demo:
 
 ## Q-learning algorithm description
 
+For Q-Learning we used a discount factor of 0.8, and we found a learning rate of 1 to be sufficient in order to accomplish the task.
+
 ## Robot perception description
 
 ## Robot manipulation and movement
