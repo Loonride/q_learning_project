@@ -176,11 +176,11 @@ class RobotMovement(object):
 
                 err = w/2 - cx
                 k_p = .003
-                if self.front_distance > .22:
-                    if err > .05: 
+                if self.front_distance > .2:
+                    if abs(err) > .05: 
                         self.set_v(.05, k_p*err)
                     else:
-                        self.set_v(.15, k_p*err)
+                        self.set_v(.13, k_p*err)
                 else:
                     self.set_v(0,0)
                     #pick up dumbbell
@@ -213,10 +213,10 @@ class RobotMovement(object):
         self.set_v(0, 0)
         rospy.sleep(1)
 
-        gripper_joint_close = [0.0065, 0.0065]
+        # gripper_joint_close = [0.0065, 0.0065]
 
-        self.move_group_gripper.go(gripper_joint_close)
-        self.move_group_gripper.stop()
+        # self.move_group_gripper.go(gripper_joint_close)
+        # self.move_group_gripper.stop()
 
         rospy.sleep(1)
 
@@ -254,7 +254,7 @@ class RobotMovement(object):
         # # select location based on data direction 
         # arm_joint_0_goal = arm_joint_0[data.direction]
 
-        # gripper_joint_close = [0.005, 0.005]
+        # gripper_joint_close = [-0.01, -0.01]
 
         # self.move_group_gripper.go(gripper_joint_close)
         # self.move_group_gripper.stop()
