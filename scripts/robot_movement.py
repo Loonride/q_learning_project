@@ -83,7 +83,7 @@ class RobotMovement(object):
 
         self.carrying_db = True
         if self.carrying_db:
-            #Need to go to office hours to ask about this
+            block_err = 100
             if self.turning:
                 print("TURNING") 
                 self.set_v(0, .5)
@@ -97,16 +97,27 @@ class RobotMovement(object):
                     self.past_counter += 1
                     return
                 pos = self.find_number(msg)
+                print("POS:",pos)
                 if pos is None:
                     # the target number is not in the robot scan
                     self.turning = True
-                else:
+                elif block_err > .5:
                     # use this averaged target number to try and slowly center the robot on the image
-                    err = w/2 - pos
-                    print(f'Error: {err}')
+                    block_err = w/2 - pos
+                    k_p = .003
+                    print('Error:',k_p*block_err)
+                    self.set_v(0., k_p*block_err)
+                    rospy.sleep(2)
+                    self.set_v(0, 0)
+                    rospy.sleep(2)
+                elif self.front_distance > .2: 
+                    self.set_v(2,0)
+                else:
+                    print("Ready to put down dumbbell")
+                    #put down dumbbell
 
-                cv2.imshow("window", image)
-                cv2.waitKey(3)
+                #cv2.imshow("window", image)
+                #cv2.waitKey(3)
             return
 
         if not self.arm_initialized:
@@ -215,7 +226,13 @@ class RobotMovement(object):
         
         if len(centers) == 0:
             return None
-        return statistics.mean(centers)
+        if block_num == 3 and len(centers) == 2:
+            center = centers[1]
+        elif block_num == 1 and len(centers) == 2: 
+            center = centers[0]
+        else: 
+            center = centers[0]
+        return center #statistics.mean(centers)
         
         #if self.block_id in prediction_groups:
         #    self.set_v(1,0)
