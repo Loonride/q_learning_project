@@ -43,6 +43,8 @@ class RobotMovement(object):
         self.turning = False
         self.arm_initialized = False
 
+        self.drive_to_block = False
+
         self.past_counter = 0
 
         print("Starting arm")
@@ -81,14 +83,29 @@ class RobotMovement(object):
 
         h, w, d = image.shape
 
-        self.carrying_db = True
         if self.carrying_db:
-            block_err = 100
+            if self.drive_to_block:
+                if self.front_distance > .8:
+                    self.set_v(.2, 0)
+                else:
+                    self.set_v(0, 0)
+                    rospy.sleep(1)
+                    self.initialize_arm()
+                    self.set_v(-.5, 0)
+                    rospy.sleep(2)
+                    self.set_v(0, 0)
+                    self.action_queue.pop(0)
+                    self.carrying_db = False
+                    self.drive_to_block = False
+                    self.turning = False
+                    # print('PLACE DUMBBELL')
+
+                return
+
             if self.turning:
                 print("TURNING") 
                 self.set_v(0, .5)
                 self.turning = False
-                self.past_counter = 0
                 rospy.sleep(2)
                 self.set_v(0, 0)
                 rospy.sleep(2)
@@ -96,28 +113,31 @@ class RobotMovement(object):
                 if self.past_counter < 100:
                     self.past_counter += 1
                     return
+                self.past_counter = 0
                 pos = self.find_number(msg)
                 print("POS:",pos)
                 if pos is None:
                     # the target number is not in the robot scan
                     self.turning = True
-                elif block_err > .5:
-                    # use this averaged target number to try and slowly center the robot on the image
-                    block_err = w/2 - pos
-                    k_p = .003
-                    print('Error:',k_p*block_err)
-                    self.set_v(0., k_p*block_err)
-                    rospy.sleep(2)
-                    self.set_v(0, 0)
-                    rospy.sleep(2)
-                elif self.front_distance > .2: 
-                    self.set_v(2,0)
                 else:
-                    print("Ready to put down dumbbell")
-                    #put down dumbbell
+                    block_err = w/2 - pos
+                    print('Block Error:', block_err)
+                    k_p = .003
+                    scaled = k_p*block_err
+                    print('Error:',scaled)
+                    if abs(block_err) > 100:
+                        # use this averaged target number to try and slowly center the robot on the image
+                        sign = 1 if scaled >= 0 else -1
+                        angular_vel = min(abs(scaled), .5)
+                        self.set_v(0., sign * angular_vel)
+                        rospy.sleep(.8)
+                        self.set_v(0, 0)
+                        rospy.sleep(.5)
+                    else:
+                        self.drive_to_block = True
 
-                #cv2.imshow("window", image)
-                #cv2.waitKey(3)
+                cv2.imshow("window", image)
+                cv2.waitKey(3)
             return
 
         if not self.arm_initialized:
@@ -162,14 +182,13 @@ class RobotMovement(object):
                     #pick up dumbbell
                     self.pickup_db()
                     self.carrying_db = True
-        #else: 
-        #    self.set_v(0,.2)
+        else: 
+           self.set_v(0,.2)
         # cv2.imshow("window", mask)
         # cv2.waitKey(3)
 
 
     def initialize_arm(self):
-        print('Initializing Arm')
         gripper_joint_open = [0.01, 0.01]
         self.move_group_gripper.go(gripper_joint_open, wait=True)
         self.move_group_gripper.stop()
@@ -181,7 +200,6 @@ class RobotMovement(object):
                     math.radians(-20.0)], wait=True)
         # Calling ``stop()`` ensures that there is no residual movement
         self.move_group_arm.stop()
-        print('Arm Initialized')
 
     def pickup_db(self):
         """ Pickup dumbbell
