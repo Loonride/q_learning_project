@@ -4,7 +4,7 @@ Team members: Kir Nagaitsev and Sydney Jenkins
 
 gif, at 4x speed for fast demo:
 
-![Robot](https://github.com/Loonride/q_learning_project/raw/main/gifs/q_learning.gif)
+![Robot](https://github.com/Loonride/q_learning_project/blob/master/gifs/q_learning.gif)
 
 # Writeup
 
