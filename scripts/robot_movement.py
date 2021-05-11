@@ -34,6 +34,8 @@ class RobotMovement(object):
         
         self.action_queue = []
         self.front_distance = 100
+        self.front_left = 100
+        self.front_right = 100
         self.carrying_db = False
         self.carrying_db_successful = False
         rospy.Subscriber("/q_learning/robot_action", RobotMoveDBToBlock, self.handle_robot_action)
@@ -41,6 +43,7 @@ class RobotMovement(object):
         self.ready_pub.publish(Empty())
 
         self.turning = False
+        self.turn_1 = False
         self.arm_initialized = False
 
         self.drive_to_block = False
@@ -64,6 +67,8 @@ class RobotMovement(object):
 
     def getDistance(self, msg):
         self.front_distance = msg.ranges[0]
+        self.front_left = msg.ranges[330]
+        self.front_right = msg.ranges[30]
 
     def complete_action(self, msg):
         if (not self.initialized):
@@ -85,15 +90,10 @@ class RobotMovement(object):
 
         if self.carrying_db:
             if self.drive_to_block:
-                if self.front_distance > .8:
+                if self.front_distance > .75 and self.front_left > .75 and self.front_right > .75:
                     self.set_v(.2, 0)
                 else:
-                    self.set_v(0, 0)
-                    rospy.sleep(1)
-                    self.initialize_arm()
-                    self.set_v(-.5, 0)
-                    rospy.sleep(2)
-                    self.set_v(0, 0)
+                    self.set_db()
                     self.action_queue.pop(0)
                     self.carrying_db = False
                     self.drive_to_block = False
@@ -106,7 +106,11 @@ class RobotMovement(object):
                 print("TURNING") 
                 self.set_v(0, .5)
                 self.turning = False
-                rospy.sleep(2)
+                if self.turn_1:
+                    rospy.sleep(4)
+                    self.turn_1 = False
+                else:
+                    rospy.sleep(2)
                 self.set_v(0, 0)
                 rospy.sleep(2)
             else:
@@ -122,22 +126,22 @@ class RobotMovement(object):
                 else:
                     block_err = w/2 - pos
                     print('Block Error:', block_err)
-                    k_p = .003
+                    k_p = .0025
                     scaled = k_p*block_err
                     print('Error:',scaled)
-                    if abs(block_err) > 100:
+                    if abs(block_err) > 75:
                         # use this averaged target number to try and slowly center the robot on the image
                         sign = 1 if scaled >= 0 else -1
                         angular_vel = min(abs(scaled), .5)
                         self.set_v(0., sign * angular_vel)
-                        rospy.sleep(.8)
+                        rospy.sleep(.5)
                         self.set_v(0, 0)
                         rospy.sleep(.5)
                     else:
                         self.drive_to_block = True
 
-                cv2.imshow("window", image)
-                cv2.waitKey(3)
+                # cv2.imshow("window", image)
+                # cv2.waitKey(3)
             return
 
         if not self.arm_initialized:
@@ -176,14 +180,18 @@ class RobotMovement(object):
                     if err > .05: 
                         self.set_v(.05, k_p*err)
                     else:
-                        self.set_v(.2, k_p*err)
+                        self.set_v(.15, k_p*err)
                 else:
                     self.set_v(0,0)
                     #pick up dumbbell
                     self.pickup_db()
+                    # self.set_db()
+                    # self.initialized = False
                     self.carrying_db = True
+                    self.turn_1 = True
+                    self.turning = True
         else: 
-           self.set_v(0,.2)
+           self.set_v(0,.4)
         # cv2.imshow("window", mask)
         # cv2.waitKey(3)
 
@@ -196,10 +204,46 @@ class RobotMovement(object):
         # wait=True ensures that the movement is synchronous
         self.move_group_arm.go([0.0,
                     math.radians(50.0),
-                    math.radians(-30.0),
-                    math.radians(-20.0)], wait=True)
+                    math.radians(-35.0),
+                    math.radians(-15.0)], wait=True)
         # Calling ``stop()`` ensures that there is no residual movement
         self.move_group_arm.stop()
+
+    def set_db(self):
+        self.set_v(0, 0)
+        rospy.sleep(1)
+
+        gripper_joint_close = [0.0065, 0.0065]
+
+        self.move_group_gripper.go(gripper_joint_close)
+        self.move_group_gripper.stop()
+
+        rospy.sleep(1)
+
+        self.move_group_arm.go([0.0,
+                    math.radians(45.0),
+                    math.radians(-20.0),
+                    math.radians(-10.0)], wait=True)
+        self.move_group_arm.stop()
+
+        rospy.sleep(1)
+
+        gripper_joint_open = [0.01, 0.01]
+        self.move_group_gripper.go(gripper_joint_open, wait=True)
+        self.move_group_gripper.stop()
+
+        # self.set_v(-.25, 0)
+        # rospy.sleep(1)
+        # self.set_v(.25, 0)
+        # rospy.sleep(.8)
+        self.set_v(-.5, 0)
+        rospy.sleep(1)
+
+        self.initialize_arm()
+
+        self.set_v(0, 0)
+
+        rospy.sleep(1)
 
     def pickup_db(self):
         """ Pickup dumbbell
@@ -217,6 +261,7 @@ class RobotMovement(object):
 
         # wait=True ensures that the movement is synchronous
         # self.move_group_arm.go([arm_joint_0_goal, 0, 0, 0], wait=True)
+
         self.move_group_arm.go([0.0,
                     math.radians(0.0),
                     math.radians(-40.0),
