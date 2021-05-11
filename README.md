@@ -2,6 +2,32 @@
 
 Team members: Kir Nagaitsev and Sydney Jenkins
 
+gif, at 4x speed for fast demo:
+
+![Robot](https://github.com/Loonride/q_learning_project/raw/main/gifs/q_learning.gif)
+
+# Writeup
+
+## Objectives Description
+
+## High-level description
+
+## Q-learning algorithm description
+
+## Robot perception description
+
+## Robot manipulation and movement
+
+## Challenges
+
+## Future work
+
+## Takeaways
+
+
+
+# Implementation Plan
+
 ## Q-learning algorithm
 
 We will execute the Q-learning algorithm by saving our initial state 0, randomly choosing a valid action based on the current state and submitting this action, then computing the new value of the state/action location in our Q-matrix when the reward is sent back. We will then call our action function to continue the process, resetting back to state 0 whenever there are no valid actions. We can test this using the provided phantom robot code, then placing a large delay between each action to see that actions are being done correctly and weights are being assigned correctly through printing of the Q-matrix.
